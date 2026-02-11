@@ -155,7 +155,9 @@ fn root() -> Element {
                     a { href: "#", onclick: move |e| {
                             e.prevent_default();
                             let u = rec.url.clone();
-                            let _ = crate::webview::open_url(u);
+                            if let Err(err) = crate::webview::open_url(u) {
+                                error_msg.set(format!("Erreur ouverture URL: {}", err));
+                            }
                         }, "{rec.label} — {rec.url}" }
                     button { onclick: move |_| on_delete(rec.id), "Supprimer" }
                 }
