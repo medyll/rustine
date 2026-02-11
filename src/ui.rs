@@ -1,5 +1,8 @@
 use futures::stream::StreamExt;
 use dioxus::prelude::*;
+use std::fs;
+use base64::engine::general_purpose::STANDARD;
+use base64::Engine;
 use dioxus::prelude::use_coroutine;
 use chrono::Utc;
 use url::Url;
@@ -18,8 +21,18 @@ fn root() -> Element {
     let mut url_input = use_signal(|| String::new());
     let mut error_msg = use_signal(|| String::new());
 
+    // Load compiled Tailwind CSS from assets at runtime and inject into the page.
+    let style_css = use_state(|| String::new());
+    {
+        let style_css = style_css.clone();
+        use_effect(move || {
+            let css = fs::read_to_string("assets/dist/styles.css").unwrap_or_default();
+            style_css.set(css);
+        });
+    }
+
     // tray -> UI error channel: use a futures unbounded sender so the UI can await messages
-    let (err_tx, mut err_rx) = futures::channel::mpsc::unbounded::<String>();
+    let (err_tx, err_rx) = futures::channel::mpsc::unbounded::<String>();
 
     if let Some(rx) = crate::tray::get_receiver() {
         let tx = err_tx.clone();
@@ -55,7 +68,7 @@ fn root() -> Element {
     // Consume error messages on the UI async context and set the signal
     let mut err_rx_opt = Some(err_rx);
     use_future(move || {
-        let mut err_rx_opt = err_rx_opt.take();
+        let err_rx_opt = err_rx_opt.take();
         async move {
             if let Some(mut rx) = err_rx_opt {
                 while let Some(msg) = rx.next().await {
@@ -124,7 +137,10 @@ fn root() -> Element {
     let current_url = url_input.with(|s| s.clone());
     let current_error = error_msg.with(|s| s.clone());
 
+    let style_content = style_css.get().to_string();
+
     rsx!(div { style: "padding:16px; font-family:Arial, sans-serif;",
+        style { "{style_content}" }
         h1 { "Rustine — reactive list" }
         form { onsubmit: move |e| {
                 e.prevent_default();
@@ -175,6 +191,12 @@ fn root() -> Element {
         ul {
             for rec in current_urls.iter().cloned() {
                 li { style: "display:flex; gap:8px; align-items:center;",
+                    { if let Some(data) = rec.icon_data.clone() {
+                        let mime = rec.icon_mime.clone().unwrap_or_else(|| "image/png".to_string());
+                        let b64 = STANDARD.encode(&data);
+                        let src = format!("data:{};base64,{}", mime, b64);
+                        rsx!(img { src: "{src}", width: "16", height: "16", style: "border-radius:2px;" })
+                    } else { rsx!() } }
                     a { href: "#", onclick: move |e| {
                             e.prevent_default();
                             let u = rec.url.clone();

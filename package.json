@@ -1,0 +1,14 @@
+{
+  "name": "rustine-assets",
+  "version": "0.0.0",
+  "private": true,
+  "devDependencies": {
+    "tailwindcss": "^4.1.18",
+    "postcss": "^8.4.0",
+    "autoprefixer": "^10.4.0"
+  },
+  "scripts": {
+    "build:css": "pnpm dlx tailwindcss@3.4.2 -i ./assets/src/styles.css -o ./assets/dist/styles.css ",
+    "watch:css": "pnpm dlx tailwindcss@3.4.2 -i ./assets/src/styles.css -o ./assets/dist/styles.css --watch"
+  }
+}

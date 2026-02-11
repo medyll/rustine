@@ -4117,6 +4117,7 @@ name = "rustine"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "base64 0.21.7",
  "chrono",
  "crossbeam-channel",
  "dioxus",
@@ -4128,6 +4129,7 @@ dependencies = [
  "rusqlite",
  "scraper",
  "serde",
+ "serde_json",
  "tao",
  "thiserror 2.0.18",
  "tray-icon",

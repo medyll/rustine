@@ -55,7 +55,8 @@ mod real_tray {
                 // populate history
                 if let Ok(list) = db.list_recent(5) {
                     for rec in list {
-                        let label = format!("{} ({})", rec.label, rec.url);
+                        let display = rec.site_name.clone().unwrap_or_else(|| rec.label.clone());
+                        let label = format!("{} ({})", display, rec.url);
                         let item = MenuItem::new(&label, true, None);
                         let item_id = item.id();
                         id_map.insert(item_id.clone(), TrayEvent::OpenUrl(rec.id));

@@ -1,0 +1,19 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Root variables to allow simple theme switching via the `dark` class */
+:root {
+  --bg: #ffffff;
+  --text: #111827;
+}
+
+.dark {
+  --bg: #0b1220;
+  --text: #e5e7eb;
+}
+
+body {
+  background-color: var(--bg);
+  color: var(--text);
+}
