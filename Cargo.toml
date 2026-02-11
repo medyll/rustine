@@ -1,0 +1,15 @@
+[package]
+name = "rustine"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+dioxus = { version = "0.4", features = ["desktop"] }
+dioxus-desktop = "0.4"
+serde = { version = "1.0", features = ["derive"] }
+url = "2"
+rusqlite = { version = "0.29", features = ["bundled"] }
+tray-icon = "0.6"
+anyhow = "1.0"
+thiserror = "1.0"
+crossbeam-channel = "0.5"
