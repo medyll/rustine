@@ -9,31 +9,7 @@ use url::Url;
 
 
 fn root() -> Element {
-    // background tray printer (non-blocking, just logs events)
-    use_effect(|| {
-        if let Some(rx) = crate::tray::get_receiver() {
-            std::thread::spawn(move || {
-                while let Ok(ev) = rx.recv() {
-                    match ev {
-                        crate::tray::TrayEvent::OpenUrl(id) => {
-                            if let Some(db) = crate::db::get_global() {
-                                match db.get_by_id(id) {
-                                    Ok(Some(rec)) => {
-                                        let u = rec.url.clone();
-                                        let _ = crate::webview::open_url(u);
-                                    }
-                                    Ok(None) => eprintln!("URL id not found: {}", id),
-                                    Err(e) => eprintln!("DB error getting url {}: {}", id, e),
-                                }
-                            }
-                        }
-                        other => println!("Received tray event in UI: {:?}", other),
-                    }
-                }
-            });
-        }
-        // Return unit, not a closure
-    });
+
 
     let mut urls = use_signal(|| Vec::<crate::db::UrlRecord>::new());
 
@@ -41,6 +17,53 @@ fn root() -> Element {
     let mut label_input = use_signal(|| String::new());
     let mut url_input = use_signal(|| String::new());
     let mut error_msg = use_signal(|| String::new());
+
+    // tray -> UI error channel: use a futures unbounded sender so the UI can await messages
+    let (err_tx, mut err_rx) = futures::channel::mpsc::unbounded::<String>();
+
+    if let Some(rx) = crate::tray::get_receiver() {
+        let tx = err_tx.clone();
+        std::thread::spawn(move || {
+            while let Ok(ev) = rx.recv() {
+                match ev {
+                    crate::tray::TrayEvent::OpenUrl(id) => {
+                        if let Some(db) = crate::db::get_global() {
+                            match db.get_by_id(id) {
+                                Ok(Some(rec)) => {
+                                    let u = rec.url.clone();
+                                    if let Err(e) = crate::webview::open_url(u) {
+                                        let _ = tx.unbounded_send(format!("Erreur ouverture URL (tray): {}", e));
+                                    }
+                                }
+                                Ok(None) => {
+                                    let _ = tx.unbounded_send(format!("URL introuvable (id={})", id));
+                                }
+                                Err(e) => {
+                                    let _ = tx.unbounded_send(format!("Erreur DB (tray): {}", e));
+                                }
+                            }
+                        } else {
+                            let _ = tx.unbounded_send("Base de données non disponible".to_string());
+                        }
+                    }
+                    other => println!("Received tray event in UI: {:?}", other),
+                }
+            }
+        });
+    }
+
+    // Consume error messages on the UI async context and set the signal
+    let mut err_rx_opt = Some(err_rx);
+    use_future(move || {
+        let mut err_rx_opt = err_rx_opt.take();
+        async move {
+            if let Some(mut rx) = err_rx_opt {
+                while let Some(msg) = rx.next().await {
+                    error_msg.set(msg);
+                }
+            }
+        }
+    });
 
     // Coroutine for async DB actions (created after signals so it can capture them)
     let db_coroutine = use_coroutine(move |mut rx| async move {
@@ -110,27 +133,27 @@ fn root() -> Element {
                 // strict validation: non-empty, valid URL, http(s) scheme, has host
                 error_msg.set(String::new());
                 if lab.is_empty() {
-                    error_msg.set("Le label ne peut pas être vide".to_string());
+                    error_msg.set("The label cannot be empty".to_string());
                     return;
                 }
                 if urlv.is_empty() {
-                    error_msg.set("L'URL ne peut pas être vide".to_string());
+                    error_msg.set("The URL cannot be empty".to_string());
                     return;
                 }
                 let parsed = match Url::parse(&urlv) {
                     Ok(u) => u,
                     Err(_) => {
-                        error_msg.set("URL invalide".to_string());
+                        error_msg.set("Invalid URL".to_string());
                         return;
                     }
                 };
                 let scheme = parsed.scheme();
                 if scheme != "http" && scheme != "https" {
-                    error_msg.set("Seules les URLs http(s) sont autorisées".to_string());
+                    error_msg.set("Only http(s) URLs are supported".to_string());
                     return;
                 }
                 if parsed.host().is_none() {
-                    error_msg.set("L'URL doit contenir un hôte".to_string());
+                    error_msg.set("The URL must contain a host".to_string());
                     return;
                 }
                 // normalize URL (e.g. add trailing slash if parsed)
@@ -144,7 +167,7 @@ fn root() -> Element {
             },
             input { placeholder: "Label", value: "{current_label}", oninput: move |e| label_input.set(e.value().clone()) }
             input { placeholder: "URL", value: "{current_url}", oninput: move |e| url_input.set(e.value().clone()) }
-            button { "Ajouter" }
+            button { "Add" }
         }
         if !current_error.is_empty() {
             p { style: "color: #c00; margin-top:8px;", "{current_error}" }
@@ -156,10 +179,10 @@ fn root() -> Element {
                             e.prevent_default();
                             let u = rec.url.clone();
                             if let Err(err) = crate::webview::open_url(u) {
-                                error_msg.set(format!("Erreur ouverture URL: {}", err));
+                                error_msg.set(format!("Error opening URL: {}", err));
                             }
                         }, "{rec.label} — {rec.url}" }
-                    button { onclick: move |_| on_delete(rec.id), "Supprimer" }
+                    button { onclick: move |_| on_delete(rec.id), "Delete" }
                 }
             }
         }
