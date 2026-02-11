@@ -1,8 +1,11 @@
 use dioxus::prelude::*;
 use std::thread;
 
-pub fn app() -> Element {
-    // simple v0.7-compatible scaffold: a button that inserts a demo URL and prints history
+
+
+#[component]
+fn Root(cx: Scope) -> Element {
+    // background tray printer
     if let Some(rx) = crate::tray::get_receiver() {
         thread::spawn(move || {
             while let Ok(ev) = rx.recv() {
@@ -11,43 +14,52 @@ pub fn app() -> Element {
         });
     }
 
-    let on_demo = move |_| {
-        if let Some(db) = crate::db::get_global() {
-            thread::spawn(move || {
-                let ts = chrono::Utc::now().timestamp();
-                if let Err(e) = db.insert_url("Demo", "https://example.com", ts) {
-                    eprintln!("Failed to insert demo url: {}", e);
-                } else if let Ok(list) = db.list_recent(10) {
-                    println!("Recent URLs:");
-                    for r in list { println!("- {} {}", r.label, r.url); }
-                }
-            });
-        }
-    };
+    let urls = use_signal(|| Vec::<crate::db::UrlRecord>::new());
 
-    let on_delete_latest = move |_| {
-        if let Some(db) = crate::db::get_global() {
-            thread::spawn(move || {
-                match db.list_recent(1) {
-                    Ok(list) if !list.is_empty() => {
-                        let id = list[0].id;
-                        if let Err(e) = db.delete(id) {
-                            eprintln!("Failed to delete id {}: {}", id, e);
-                        } else {
-                            println!("Deleted id {}", id);
-                        }
+    // load initial list once
+    {
+        let urls = urls.clone();
+        use_effect(move || {
+            if let Some(db) = crate::db::get_global() {
+                thread::spawn(move || {
+                    if let Ok(list) = db.list_recent(100) {
+                        urls.set(list);
                     }
-                    Ok(_) => println!("No entries to delete"),
-                    Err(e) => eprintln!("Failed to fetch latest for delete: {}", e),
-                }
-            });
-        }
-    };
+                });
+            }
+        });
+    }
 
-    rsx!(div { style: "padding:16px; font-family:Arial, sans-serif;",
-        h1 { "Rustine — prototype (v0.7 UI)" }
-        button { onclick:on_demo, "Insert demo URL and print history" }
-        button { onclick:on_delete_latest, "Delete latest" }
-        p { "More UI features (reactive lists, inputs) can be added next." }
-    })
+    // snapshot for iteration
+    let current_urls = urls.with(|v| v.clone());
+
+    cx.render(rsx!(div { style: "padding:16px; font-family:Arial, sans-serif;",
+        h1 { "Rustine — reactive list" }
+        ul {
+            for rec in current_urls.iter().cloned() {
+                li { style: "display:flex; gap:8px; align-items:center;",
+                    span { "{rec.label} — {rec.url}" }
+                    button { onclick: move |_| {
+                        if let Some(db) = crate::db::get_global() {
+                            let id = rec.id;
+                            let urls = urls.clone();
+                            thread::spawn(move || {
+                                if let Err(e) = db.delete(id) {
+                                    eprintln!("Failed to delete {}: {}", id, e);
+                                }
+                                if let Ok(list) = db.list_recent(100) {
+                                    urls.set(list);
+                                }
+                            });
+                        }
+                    }, "Supprimer" }
+                }
+            }
+        }
+    }))
+}
+
+
+pub fn app(cx: Scope) -> Element {
+    rsx!(Root { cx })
 }
