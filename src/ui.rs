@@ -22,9 +22,9 @@ fn root() -> Element {
     let mut error_msg = use_signal(|| String::new());
 
     // Load compiled Tailwind CSS from assets at runtime and inject into the page.
-    let style_css = use_state(|| String::new());
+    let style_css = use_signal(|| String::new());
     {
-        let style_css = style_css.clone();
+        let mut style_css = style_css.clone();
         use_effect(move || {
             let css = fs::read_to_string("assets/dist/styles.css").unwrap_or_default();
             style_css.set(css);
@@ -137,7 +137,7 @@ fn root() -> Element {
     let current_url = url_input.with(|s| s.clone());
     let current_error = error_msg.with(|s| s.clone());
 
-    let style_content = style_css.get().to_string();
+    let style_content = style_css.with(|s| s.clone());
 
     rsx!(div { style: "padding:16px; font-family:Arial, sans-serif;",
         style { "{style_content}" }
@@ -205,6 +205,7 @@ fn root() -> Element {
                             }
                         }, "{rec.label} — {rec.url}" }
                     button { onclick: move |_| on_delete(rec.id), "Delete" }
+                    button { onclick: move |_| on_details(rec.id), "Details" } 
                 }
             }
         }
