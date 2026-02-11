@@ -2,6 +2,7 @@ use anyhow::{anyhow, Result};
 use crossbeam_channel::{unbounded, Receiver, Sender};
 use rusqlite::{params, Connection};
 use std::thread;
+use once_cell::sync::OnceCell;
 
 #[derive(Debug, Clone)]
 pub struct UrlRecord {
@@ -33,6 +34,18 @@ pub struct DbHandle {
     tx: Sender<DbRequest>,
 }
 
+static GLOBAL_DB: OnceCell<DbHandle> = OnceCell::new();
+
+pub fn set_global(db: DbHandle) -> Result<()> {
+    GLOBAL_DB
+        .set(db)
+        .map_err(|_| anyhow::anyhow!("global DB handle already set"))
+}
+
+pub fn get_global() -> Option<DbHandle> {
+    GLOBAL_DB.get().cloned()
+}
+
 impl DbHandle {
     pub fn insert_url(&self, label: &str, url: &str, timestamp: i64) -> Result<()> {
         let (tx, rx) = unbounded();
@@ -54,7 +67,7 @@ impl DbHandle {
         self.tx
             .send(req)
             .map_err(|e| anyhow!("Failed to send list request: {}", e))?;
-        rx.recv().map_err(|e| anyhow!("DB response recv failed: {}", e))??
+        Ok(rx.recv().map_err(|e| anyhow!("DB response recv failed: {}", e))??)
     }
 
     pub fn delete(&self, id: i64) -> Result<()> {
