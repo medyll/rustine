@@ -28,6 +28,10 @@ enum DbRequest {
         id: i64,
         resp: Sender<anyhow::Result<()>>,
     },
+    GetById {
+        id: i64,
+        resp: Sender<anyhow::Result<Option<UrlRecord>>> ,
+    },
 }
 
 #[derive(Clone)]
@@ -78,6 +82,15 @@ impl DbHandle {
             .send(req)
             .map_err(|e| anyhow!("Failed to send delete request: {}", e))?;
         rx.recv().map_err(|e| anyhow!("DB response recv failed: {}", e))?
+    }
+
+    pub fn get_by_id(&self, id: i64) -> Result<Option<UrlRecord>> {
+        let (tx, rx) = unbounded();
+        let req = DbRequest::GetById { id, resp: tx };
+        self.tx
+            .send(req)
+            .map_err(|e| anyhow!("Failed to send get_by_id request: {}", e))?;
+        Ok(rx.recv().map_err(|e| anyhow!("DB response recv failed: {}", e))??)
     }
 
 }
@@ -142,6 +155,27 @@ fn db_thread(rx: Receiver<DbRequest>) -> Result<()> {
                 let res = (|| -> Result<()> {
                     conn.execute("DELETE FROM urls WHERE id = ?1", params![id])?;
                     Ok(())
+                })();
+                let _ = resp.send(res.map_err(|e| anyhow!(e.to_string())));
+            }
+            DbRequest::GetById { id, resp } => {
+                let res = (|| -> Result<Option<UrlRecord>> {
+                    let mut stmt = conn.prepare(
+                        "SELECT id, label, url, timestamp FROM urls WHERE id = ?1 LIMIT 1",
+                    )?;
+                    let mut rows = stmt.query_map(params![id], |row| {
+                        Ok(UrlRecord {
+                            id: row.get(0)?,
+                            label: row.get(1)?,
+                            url: row.get(2)?,
+                            _timestamp: row.get(3)?,
+                        })
+                    })?;
+                    if let Some(r) = rows.next() {
+                        Ok(Some(r?))
+                    } else {
+                        Ok(None)
+                    }
                 })();
                 let _ = resp.send(res.map_err(|e| anyhow!(e.to_string())));
             }

@@ -1,6 +1,8 @@
 mod db;
 mod tray;
 mod ui;
+mod webview;
+// note: webview module removed; using system browser instead
 
 use dioxus_desktop::launch::launch;
 

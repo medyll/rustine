@@ -3,6 +3,7 @@ use dioxus::prelude::*;
 use dioxus::prelude::use_coroutine;
 use chrono::Utc;
 use url::Url;
+// use crate::webview; -- calling via `crate::webview::open_url(...)`
 
 
 
@@ -13,7 +14,21 @@ fn root() -> Element {
         if let Some(rx) = crate::tray::get_receiver() {
             std::thread::spawn(move || {
                 while let Ok(ev) = rx.recv() {
-                    println!("Received tray event in UI: {:?}", ev);
+                    match ev {
+                        crate::tray::TrayEvent::OpenUrl(id) => {
+                            if let Some(db) = crate::db::get_global() {
+                                match db.get_by_id(id) {
+                                    Ok(Some(rec)) => {
+                                        let u = rec.url.clone();
+                                        let _ = crate::webview::open_url(u);
+                                    }
+                                    Ok(None) => eprintln!("URL id not found: {}", id),
+                                    Err(e) => eprintln!("DB error getting url {}: {}", id, e),
+                                }
+                            }
+                        }
+                        other => println!("Received tray event in UI: {:?}", other),
+                    }
                 }
             });
         }
@@ -137,7 +152,11 @@ fn root() -> Element {
         ul {
             for rec in current_urls.iter().cloned() {
                 li { style: "display:flex; gap:8px; align-items:center;",
-                    span { "{rec.label} — {rec.url}" }
+                    a { href: "#", onclick: move |e| {
+                            e.prevent_default();
+                            let u = rec.url.clone();
+                            let _ = crate::webview::open_url(u);
+                        }, "{rec.label} — {rec.url}" }
                     button { onclick: move |_| on_delete(rec.id), "Supprimer" }
                 }
             }
