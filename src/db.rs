@@ -9,14 +9,15 @@ pub struct UrlRecord {
     pub id: i64,
     pub label: String,
     pub url: String,
-    pub timestamp: i64,
+    pub _timestamp: i64,
 }
 
+#[allow(dead_code)]
 enum DbRequest {
     Insert {
         label: String,
         url: String,
-        timestamp: i64,
+        _timestamp: i64,
         resp: Sender<anyhow::Result<()>>,
     },
     ListRecent {
@@ -52,7 +53,7 @@ impl DbHandle {
         let req = DbRequest::Insert {
             label: label.to_string(),
             url: url.to_string(),
-            timestamp,
+            _timestamp: timestamp,
             resp: tx,
         };
         self.tx
@@ -78,6 +79,7 @@ impl DbHandle {
             .map_err(|e| anyhow!("Failed to send delete request: {}", e))?;
         rx.recv().map_err(|e| anyhow!("DB response recv failed: {}", e))?
     }
+
 }
 
 /// Initialize the DB actor: spawn a dedicated thread owning the Connection and return a `DbHandle`.
@@ -107,11 +109,11 @@ fn db_thread(rx: Receiver<DbRequest>) -> Result<()> {
 
     while let Ok(req) = rx.recv() {
         match req {
-            DbRequest::Insert { label, url, timestamp, resp } => {
+            DbRequest::Insert { label, url, _timestamp, resp } => {
                 let res = (|| -> Result<()> {
                     conn.execute(
                         "INSERT INTO urls (label, url, timestamp) VALUES (?1, ?2, ?3)",
-                        params![label, url, timestamp],
+                        params![label, url, _timestamp],
                     )?;
                     Ok(())
                 })();
@@ -128,7 +130,7 @@ fn db_thread(rx: Receiver<DbRequest>) -> Result<()> {
                                 id: row.get(0)?,
                                 label: row.get(1)?,
                                 url: row.get(2)?,
-                                timestamp: row.get(3)?,
+                                _timestamp: row.get(3)?,
                             })
                         })?
                         .collect::<Result<Vec<_>, rusqlite::Error>>()?;
