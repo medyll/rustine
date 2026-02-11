@@ -1,11 +1,86 @@
-use anyhow::Result;
+use anyhow::{anyhow, Result};
+use crossbeam_channel::{unbounded, Receiver, Sender};
 use rusqlite::{params, Connection};
-use std::sync::{Arc, Mutex};
+use std::thread;
 
-pub type DbHandle = Arc<Mutex<Connection>>;
+#[derive(Debug, Clone)]
+pub struct UrlRecord {
+    pub id: i64,
+    pub label: String,
+    pub url: String,
+    pub timestamp: i64,
+}
 
-/// Initialize or open the database and create `urls` table if needed.
+enum DbRequest {
+    Insert {
+        label: String,
+        url: String,
+        timestamp: i64,
+        resp: Sender<anyhow::Result<()>>,
+    },
+    ListRecent {
+        limit: i64,
+        resp: Sender<anyhow::Result<Vec<UrlRecord>>> ,
+    },
+    Delete {
+        id: i64,
+        resp: Sender<anyhow::Result<()>>,
+    },
+}
+
+#[derive(Clone)]
+pub struct DbHandle {
+    tx: Sender<DbRequest>,
+}
+
+impl DbHandle {
+    pub fn insert_url(&self, label: &str, url: &str, timestamp: i64) -> Result<()> {
+        let (tx, rx) = unbounded();
+        let req = DbRequest::Insert {
+            label: label.to_string(),
+            url: url.to_string(),
+            timestamp,
+            resp: tx,
+        };
+        self.tx
+            .send(req)
+            .map_err(|e| anyhow!("Failed to send insert request: {}", e))?;
+        rx.recv().map_err(|e| anyhow!("DB response recv failed: {}", e))?
+    }
+
+    pub fn list_recent(&self, limit: i64) -> Result<Vec<UrlRecord>> {
+        let (tx, rx) = unbounded();
+        let req = DbRequest::ListRecent { limit, resp: tx };
+        self.tx
+            .send(req)
+            .map_err(|e| anyhow!("Failed to send list request: {}", e))?;
+        rx.recv().map_err(|e| anyhow!("DB response recv failed: {}", e))??
+    }
+
+    pub fn delete(&self, id: i64) -> Result<()> {
+        let (tx, rx) = unbounded();
+        let req = DbRequest::Delete { id, resp: tx };
+        self.tx
+            .send(req)
+            .map_err(|e| anyhow!("Failed to send delete request: {}", e))?;
+        rx.recv().map_err(|e| anyhow!("DB response recv failed: {}", e))?
+    }
+}
+
+/// Initialize the DB actor: spawn a dedicated thread owning the Connection and return a `DbHandle`.
 pub fn init_db() -> Result<DbHandle> {
+    let (tx, rx): (Sender<DbRequest>, Receiver<DbRequest>) = unbounded();
+
+    thread::spawn(move || {
+        if let Err(e) = db_thread(rx) {
+            eprintln!("DB thread error: {}", e);
+        }
+    });
+
+    Ok(DbHandle { tx })
+}
+
+fn db_thread(rx: Receiver<DbRequest>) -> Result<()> {
     let conn = Connection::open("rustine.db")?;
     conn.execute(
         "CREATE TABLE IF NOT EXISTS urls (
@@ -16,32 +91,47 @@ pub fn init_db() -> Result<DbHandle> {
         )",
         params![],
     )?;
-    Ok(Arc::new(Mutex::new(conn)))
-}
 
-/// Insert a URL record (simple API for scaffold)
-pub fn insert_url(db: &DbHandle, label: &str, url: &str, timestamp: i64) -> Result<()> {
-    let conn = db.lock().unwrap();
-    conn.execute(
-        "INSERT INTO urls (label, url, timestamp) VALUES (?1, ?2, ?3)",
-        params![label, url, timestamp],
-    )?;
-    Ok(())
-}
+    while let Ok(req) = rx.recv() {
+        match req {
+            DbRequest::Insert { label, url, timestamp, resp } => {
+                let res = (|| -> Result<()> {
+                    conn.execute(
+                        "INSERT INTO urls (label, url, timestamp) VALUES (?1, ?2, ?3)",
+                        params![label, url, timestamp],
+                    )?;
+                    Ok(())
+                })();
+                let _ = resp.send(res.map_err(|e| anyhow!(e.to_string())));
+            }
+            DbRequest::ListRecent { limit, resp } => {
+                let res = (|| -> Result<Vec<UrlRecord>> {
+                    let mut stmt = conn.prepare(
+                        "SELECT id, label, url, timestamp FROM urls ORDER BY timestamp DESC LIMIT ?1",
+                    )?;
+                    let rows = stmt
+                        .query_map(params![limit], |row| {
+                            Ok(UrlRecord {
+                                id: row.get(0)?,
+                                label: row.get(1)?,
+                                url: row.get(2)?,
+                                timestamp: row.get(3)?,
+                            })
+                        })?
+                        .collect::<Result<Vec<_>, rusqlite::Error>>()?;
+                    Ok(rows)
+                })();
+                let _ = resp.send(res.map_err(|e| anyhow!(e.to_string())));
+            }
+            DbRequest::Delete { id, resp } => {
+                let res = (|| -> Result<()> {
+                    conn.execute("DELETE FROM urls WHERE id = ?1", params![id])?;
+                    Ok(())
+                })();
+                let _ = resp.send(res.map_err(|e| anyhow!(e.to_string())));
+            }
+        }
+    }
 
-/// List recent URLs (limit)
-pub fn list_recent(db: &DbHandle, limit: i64) -> Result<Vec<(i64, String, String, i64)>> {
-    let conn = db.lock().unwrap();
-    let mut stmt = conn.prepare("SELECT id, label, url, timestamp FROM urls ORDER BY timestamp DESC LIMIT ?1")?;
-    let rows = stmt
-        .query_map(params![limit], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)))?
-        .collect::<Result<Vec<_>, rusqlite::Error>>()?;
-    Ok(rows)
-}
-
-/// Delete by id
-pub fn delete(db: &DbHandle, id: i64) -> Result<()> {
-    let conn = db.lock().unwrap();
-    conn.execute("DELETE FROM urls WHERE id = ?1", params![id])?;
     Ok(())
 }
