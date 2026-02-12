@@ -8,18 +8,16 @@ use chrono::Utc;
 use url::Url;
 // use crate::webview; -- calling via `crate::webview::open_url(...)`
 
-
-
-
 fn root() -> Element {
-
-
     let mut urls = use_signal(|| Vec::<crate::db::UrlRecord>::new());
 
     // input state for new URL and error message
     let mut label_input = use_signal(|| String::new());
     let mut url_input = use_signal(|| String::new());
     let mut error_msg = use_signal(|| String::new());
+
+    // selected screen for simple in-app navigation (None => list view)
+    let mut selected_screen = use_signal(|| Option::<i64>::None);
 
     // Load compiled Tailwind CSS from assets at runtime and inject into the page.
     let style_css = use_signal(|| String::new());
@@ -59,7 +57,16 @@ fn root() -> Element {
                             let _ = tx.unbounded_send("Base de données non disponible".to_string());
                         }
                     }
-                    other => println!("Received tray event in UI: {:?}", other),
+                    crate::tray::TrayEvent::Show => {
+                        let _ = tx.unbounded_send("Tray: show clicked".to_string());
+                    }
+                    crate::tray::TrayEvent::Add => {
+                        let _ = tx.unbounded_send("Tray: add clicked".to_string());
+                    }
+                    crate::tray::TrayEvent::Quit => {
+                        let _ = tx.unbounded_send("Tray: quit requested".to_string());
+                    }
+                    // all TrayEvent variants handled above; no-op for others
                 }
             }
         });
@@ -67,6 +74,7 @@ fn root() -> Element {
 
     // Consume error messages on the UI async context and set the signal
     let mut err_rx_opt = Some(err_rx);
+
     use_future(move || {
         let err_rx_opt = err_rx_opt.take();
         async move {
@@ -132,6 +140,13 @@ fn root() -> Element {
         }
     };
 
+    let mut on_details = {
+        let mut selected = selected_screen.clone();
+        move |id: i64| {
+            selected.set(Some(id));
+        }
+    };
+
     let current_urls = urls.with(|v| v.clone());
     let current_label = label_input.with(|s| s.clone());
     let current_url = url_input.with(|s| s.clone());
@@ -141,71 +156,77 @@ fn root() -> Element {
 
     rsx!(div { style: "padding:16px; font-family:Arial, sans-serif;",
         style { "{style_content}" }
-        h1 { "Rustine — reactive list" }
-        form { onsubmit: move |e| {
-                e.prevent_default();
-                let lab = label_input.with(|s| s.clone()).trim().to_string();
-                let urlv = url_input.with(|s| s.clone()).trim().to_string();
-                // strict validation: non-empty, valid URL, http(s) scheme, has host
-                error_msg.set(String::new());
-                if lab.is_empty() {
-                    error_msg.set("The label cannot be empty".to_string());
-                    return;
-                }
-                if urlv.is_empty() {
-                    error_msg.set("The URL cannot be empty".to_string());
-                    return;
-                }
-                let parsed = match Url::parse(&urlv) {
-                    Ok(u) => u,
-                    Err(_) => {
-                        error_msg.set("Invalid URL".to_string());
+        if let Some(screen_id) = selected_screen.with(|s| *s) {
+            h1 { "Details" }
+            p { "Screen id: {screen_id}" }
+            button { onclick: move |_| selected_screen.set(None), "Back" }
+        } else {
+            h1 { "Rustine — reactive list" }
+            form { onsubmit: move |e| {
+                    e.prevent_default();
+                    let lab = label_input.with(|s| s.clone()).trim().to_string();
+                    let urlv = url_input.with(|s| s.clone()).trim().to_string();
+                    // strict validation: non-empty, valid URL, http(s) scheme, has host
+                    error_msg.set(String::new());
+                    if lab.is_empty() {
+                        error_msg.set("The label cannot be empty".to_string());
                         return;
                     }
-                };
-                let scheme = parsed.scheme();
-                if scheme != "http" && scheme != "https" {
-                    error_msg.set("Only http(s) URLs are supported".to_string());
-                    return;
-                }
-                if parsed.host().is_none() {
-                    error_msg.set("The URL must contain a host".to_string());
-                    return;
-                }
-                // normalize URL (e.g. add trailing slash if parsed)
-                let normalized = Into::<String>::into(parsed);
-                let db_coroutine = db_coroutine.clone();
-                // send insert action with timestamp
-                db_coroutine.send(DbAction::Insert(lab, normalized, Utc::now().timestamp()));
-                // clear inputs (error cleared by coroutine on success)
-                label_input.set(String::new());
-                url_input.set(String::new());
-            },
-            input { placeholder: "Label", value: "{current_label}", oninput: move |e| label_input.set(e.value().clone()) }
-            input { placeholder: "URL", value: "{current_url}", oninput: move |e| url_input.set(e.value().clone()) }
-            button { "Add" }
-        }
-        if !current_error.is_empty() {
-            p { style: "color: #c00; margin-top:8px;", "{current_error}" }
-        }
-        ul {
-            for rec in current_urls.iter().cloned() {
-                li { style: "display:flex; gap:8px; align-items:center;",
-                    { if let Some(data) = rec.icon_data.clone() {
-                        let mime = rec.icon_mime.clone().unwrap_or_else(|| "image/png".to_string());
-                        let b64 = STANDARD.encode(&data);
-                        let src = format!("data:{};base64,{}", mime, b64);
-                        rsx!(img { src: "{src}", width: "16", height: "16", style: "border-radius:2px;" })
-                    } else { rsx!() } }
-                    a { href: "#", onclick: move |e| {
-                            e.prevent_default();
-                            let u = rec.url.clone();
-                            if let Err(err) = crate::webview::open_url(u) {
-                                error_msg.set(format!("Error opening URL: {}", err));
-                            }
-                        }, "{rec.label} — {rec.url}" }
-                    button { onclick: move |_| on_delete(rec.id), "Delete" }
-                    button { onclick: move |_| on_details(rec.id), "Details" } 
+                    if urlv.is_empty() {
+                        error_msg.set("The URL cannot be empty".to_string());
+                        return;
+                    }
+                    let parsed = match Url::parse(&urlv) {
+                        Ok(u) => u,
+                        Err(_) => {
+                            error_msg.set("Invalid URL".to_string());
+                            return;
+                        }
+                    };
+                    let scheme = parsed.scheme();
+                    if scheme != "http" && scheme != "https" {
+                        error_msg.set("Only http(s) URLs are supported".to_string());
+                        return;
+                    }
+                    if parsed.host().is_none() {
+                        error_msg.set("The URL must contain a host".to_string());
+                        return;
+                    }
+                    // normalize URL (e.g. add trailing slash if parsed)
+                    let normalized = Into::<String>::into(parsed);
+                    let db_coroutine = db_coroutine.clone();
+                    // send insert action with timestamp
+                    db_coroutine.send(DbAction::Insert(lab, normalized, Utc::now().timestamp()));
+                    // clear inputs (error cleared by coroutine on success)
+                    label_input.set(String::new());
+                    url_input.set(String::new());
+                },
+                input { placeholder: "Label", value: "{current_label}", oninput: move |e| label_input.set(e.value().clone()) }
+                input { placeholder: "URL", value: "{current_url}", oninput: move |e| url_input.set(e.value().clone()) }
+                button { "Add" }
+            }
+            if !current_error.is_empty() {
+                p { style: "color: #c00; margin-top:8px;", "{current_error}" }
+            }
+            ul {
+                for rec in current_urls.iter().cloned() {
+                    li { style: "display:flex; gap:8px; align-items:center;",
+                        { if let Some(data) = rec.icon_data.clone() {
+                            let mime = rec.icon_mime.clone().unwrap_or_else(|| "image/png".to_string());
+                            let b64 = STANDARD.encode(&data);
+                            let src = format!("data:{};base64,{}", mime, b64);
+                            rsx!(img { src: "{src}", width: "16", height: "16", style: "border-radius:2px;" })
+                        } else { rsx!() } }
+                        a { href: "#", onclick: move |e| {
+                                e.prevent_default();
+                                let u = rec.url.clone();
+                                if let Err(err) = crate::webview::open_url(u) {
+                                    error_msg.set(format!("Error opening URL: {}", err));
+                                }
+                            }, "{rec.label} — {rec.url}" }
+                        button { onclick: move |_| on_delete(rec.id), "Delete" }
+                        button { onclick: move |_| on_details(rec.id), "Details" }
+                    }
                 }
             }
         }

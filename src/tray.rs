@@ -31,67 +31,81 @@ mod real_tray {
             .expect("TRAY_TX must be set before starting real tray")
             .clone();
 
-        // spawn a dedicated tray thread which will own the TrayIcon and perform menu updates
-        thread::spawn(move || -> Result<()> {
-            // create an initial empty menu and tray icon
-            let initial_menu = Menu::new();
-            let tray = TrayIconBuilder::new()
-                .with_menu(Box::new(initial_menu))
-                .with_tooltip("Rustine")
-                .build()?;
+        // Build the tray on the current (main) thread. This avoids creating
+        // a platform event loop off the main thread (Windows panics otherwise).
+        // We keep the TrayIcon alive for the process lifetime by leaking it.
+        let menu = Menu::new();
+        let show_item = MenuItem::new("Voir les URLs", true, None);
+        let add_item = MenuItem::new("Ajouter URL", true, None);
+        let history_submenu = Submenu::new("Historique", true);
 
-            // receiver for menu events
-            let menu_rx = tray_icon::menu::MenuEvent::receiver();
+        let mut id_map: std::collections::HashMap<MenuId, TrayEvent> = std::collections::HashMap::new();
 
-            loop {
-                // Build new menu from DB
-                let menu = Menu::new();
-                let show_item = MenuItem::new("Voir les URLs", true, None);
-                let add_item = MenuItem::new("Ajouter URL", true, None);
-                let history_submenu = Submenu::new("Historique", true);
+        if let Ok(list) = db.list_recent(5) {
+            for rec in list {
+                let display = rec.site_name.clone().unwrap_or_else(|| rec.label.clone());
+                let label = format!("{} ({})", display, rec.url);
+                let item = MenuItem::new(&label, true, None);
+                let item_id = item.id();
+                id_map.insert(item_id.clone(), TrayEvent::OpenUrl(rec.id));
+                let _ = history_submenu.append_items(&[&item]);
+                println!("[tray] added history menu item id={:?} -> url id={}", item_id, rec.id);
+            }
+        }
 
-                let mut id_map: std::collections::HashMap<MenuId, TrayEvent> = std::collections::HashMap::new();
+        let quit_item = MenuItem::new("Quitter Rustine", true, None);
+        let _ = menu.append_items(&[
+            &show_item,
+            &add_item,
+            &PredefinedMenuItem::separator(),
+            &history_submenu,
+            &PredefinedMenuItem::separator(),
+            &quit_item,
+        ]);
 
-                // populate history
-                if let Ok(list) = db.list_recent(5) {
-                    for rec in list {
-                        let display = rec.site_name.clone().unwrap_or_else(|| rec.label.clone());
-                        let label = format!("{} ({})", display, rec.url);
-                        let item = MenuItem::new(&label, true, None);
-                        let item_id = item.id();
-                        id_map.insert(item_id.clone(), TrayEvent::OpenUrl(rec.id));
-                        let _ = history_submenu.append_items(&[&item]);
-                    }
+        println!("[tray] menu set: show_id={:?}, add_id={:?}, quit_id={:?}", show_item.id(), add_item.id(), quit_item.id());
+
+        let tray = TrayIconBuilder::new()
+            .with_menu(Box::new(menu))
+            .with_tooltip("Rustine")
+            .build()?;
+
+        // Keep the tray alive for the process lifetime.
+        let _static_tray_ref: &'static tray_icon::TrayIcon = Box::leak(Box::new(tray));
+
+        println!("[tray] tray icon created on main thread and leaked to static lifetime");
+
+        // Receiver for menu events (the crate will forward events when the
+        // platform/main event loop runs, e.g., after the GUI is launched).
+        let menu_rx = tray_icon::menu::MenuEvent::receiver();
+
+        // Move id_map and the item ids into a background thread that will
+        // forward menu events into our application channel. The actual menu
+        // dispatch is performed by the global event loop, so reading from
+        // `menu_rx` here is safe.
+        let show_id = show_item.id().clone();
+        let add_id = add_item.id().clone();
+        let quit_id = quit_item.id().clone();
+        let id_map = std::sync::Arc::new(id_map);
+
+        thread::spawn(move || {
+            while let Ok(ev) = menu_rx.recv() {
+                println!("[tray] menu event id={:?}", ev.id);
+                if let Some(action) = id_map.get(&ev.id) {
+                    println!("[tray] mapped history item -> {:?}", action);
+                    let _ = tx.send(action.clone());
+                } else if ev.id == show_id {
+                    println!("[tray] Show clicked");
+                    let _ = tx.send(TrayEvent::Show);
+                } else if ev.id == add_id {
+                    println!("[tray] Add clicked");
+                    let _ = tx.send(TrayEvent::Add);
+                } else if ev.id == quit_id {
+                    println!("[tray] Quit clicked");
+                    let _ = tx.send(TrayEvent::Quit);
+                } else {
+                    println!("[tray] Unhandled menu event: {:?}", ev.id);
                 }
-
-                let _ = menu.append_items(&[
-                    &show_item,
-                    &add_item,
-                    &PredefinedMenuItem::separator(),
-                    &history_submenu,
-                    &PredefinedMenuItem::separator(),
-                    &MenuItem::new("Quitter Rustine", true, None),
-                ]);
-
-                // set the new menu on the tray icon
-                tray.set_menu(Some(Box::new(menu)));
-
-                // Drain menu events and forward as TrayEvent
-                while let Ok(ev) = menu_rx.try_recv() {
-                    if let Some(action) = id_map.get(&ev.id) {
-                        let _ = tx.send(action.clone());
-                    } else if ev.id == show_item.id() {
-                        let _ = tx.send(TrayEvent::Show);
-                    } else if ev.id == add_item.id() {
-                        let _ = tx.send(TrayEvent::Add);
-                    } else {
-                        // other events (e.g., Quit)
-                        // match by text fallback is not available; rely on static Quit item id
-                    }
-                }
-
-                // Sleep until next refresh
-                thread::sleep(Duration::from_secs(30));
             }
         });
 
