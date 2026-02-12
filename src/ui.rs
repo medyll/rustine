@@ -29,48 +29,67 @@ fn root() -> Element {
         });
     }
 
-    // tray -> UI error channel: use a futures unbounded sender so the UI can await messages
+    // tray -> UI: forward TrayEvent into a dioxus coroutine so UI/main-thread
+    // code (not a background thread) performs actions like opening URLs.
     let (err_tx, err_rx) = futures::channel::mpsc::unbounded::<String>();
 
+    // Create an async channel that is safe to send from other threads.
+    let (tray_async_tx, tray_async_rx) = futures::channel::mpsc::unbounded::<crate::tray::TrayEvent>();
+
+    // Background thread: read the crossbeam receiver and forward into the async channel.
     if let Some(rx) = crate::tray::get_receiver() {
-        let tx = err_tx.clone();
+        let tx = tray_async_tx.clone();
         std::thread::spawn(move || {
             while let Ok(ev) = rx.recv() {
-                match ev {
-                    crate::tray::TrayEvent::OpenUrl(id) => {
-                        if let Some(db) = crate::db::get_global() {
-                            match db.get_by_id(id) {
-                                Ok(Some(rec)) => {
-                                    let u = rec.url.clone();
-                                    if let Err(e) = crate::webview::open_url(u) {
-                                        let _ = tx.unbounded_send(format!("Erreur ouverture URL (tray): {}", e));
-                                    }
-                                }
-                                Ok(None) => {
-                                    let _ = tx.unbounded_send(format!("URL introuvable (id={})", id));
-                                }
-                                Err(e) => {
-                                    let _ = tx.unbounded_send(format!("Erreur DB (tray): {}", e));
-                                }
-                            }
-                        } else {
-                            let _ = tx.unbounded_send("Base de données non disponible".to_string());
-                        }
-                    }
-                    crate::tray::TrayEvent::Show => {
-                        let _ = tx.unbounded_send("Tray: show clicked".to_string());
-                    }
-                    crate::tray::TrayEvent::Add => {
-                        let _ = tx.unbounded_send("Tray: add clicked".to_string());
-                    }
-                    crate::tray::TrayEvent::Quit => {
-                        let _ = tx.unbounded_send("Tray: quit requested".to_string());
-                    }
-                    // all TrayEvent variants handled above; no-op for others
-                }
+                let _ = tx.unbounded_send(ev);
             }
         });
     }
+
+    // Consume the async tray events on the UI's async context so UI/main-thread
+    // operations (like opening a webview) are executed in the right context.
+    let mut tray_rx_opt = Some(tray_async_rx);
+    use_future(move || {
+        let err_tx = err_tx.clone();
+        let tray_rx_opt = tray_rx_opt.take();
+        async move {
+            if let Some(mut rx) = tray_rx_opt {
+                while let Some(ev) = rx.next().await {
+                    match ev {
+                        crate::tray::TrayEvent::OpenUrl(id) => {
+                            if let Some(db) = crate::db::get_global() {
+                                match db.get_by_id(id) {
+                                    Ok(Some(rec)) => {
+                                        let u = rec.url.clone();
+                                        if let Err(e) = crate::webview::open_url(u) {
+                                            let _ = err_tx.unbounded_send(format!("Erreur ouverture URL (tray): {}", e));
+                                        }
+                                    }
+                                    Ok(None) => {
+                                        let _ = err_tx.unbounded_send(format!("URL introuvable (id={})", id));
+                                    }
+                                    Err(e) => {
+                                        let _ = err_tx.unbounded_send(format!("Erreur DB (tray): {}", e));
+                                    }
+                                }
+                            } else {
+                                let _ = err_tx.unbounded_send("Base de données non disponible".to_string());
+                            }
+                        }
+                        crate::tray::TrayEvent::Show => {
+                            let _ = err_tx.unbounded_send("Tray: show clicked".to_string());
+                        }
+                        crate::tray::TrayEvent::Add => {
+                            let _ = err_tx.unbounded_send("Tray: add clicked".to_string());
+                        }
+                        crate::tray::TrayEvent::Quit => {
+                            let _ = err_tx.unbounded_send("Tray: quit requested".to_string());
+                        }
+                    }
+                }
+            }
+        }
+    });
 
     // Consume error messages on the UI async context and set the signal
     let mut err_rx_opt = Some(err_rx);
