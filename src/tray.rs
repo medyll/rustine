@@ -23,6 +23,10 @@ mod real_tray {
     use super::*;
     use tray_icon::menu::{Menu, MenuItem, PredefinedMenuItem, Submenu, MenuId};
     use tray_icon::TrayIconBuilder;
+    use tray_icon::Icon as TrayIconIcon;
+    use std::fs;
+    use std::path::Path;
+    use image::io::Reader as ImageReader;
     // Arc not needed here
 
     pub fn start_real_tray(db: crate::db::DbHandle) -> Result<()> {
@@ -65,10 +69,69 @@ mod real_tray {
 
         println!("[tray] menu set: show_id={:?}, add_id={:?}, quit_id={:?}", show_item.id(), add_item.id(), quit_item.id());
 
-        let tray = TrayIconBuilder::new()
+        // Try to load a tray icon from assets and provide it to the builder
+        fn load_tray_icon() -> Option<TrayIconIcon> {
+            // candidate files in order of preference
+            let candidates = [
+                "assets/icons/tray-48.png",
+                "assets/icons/tray-32.png",
+                "assets/icons/tray-16.png",
+                "assets/icon.ico",
+            ];
+
+            for p in &candidates {
+                // try raw file first
+                if Path::new(p).exists() {
+                    if let Ok(bytes) = fs::read(p) {
+                        if let Ok(img) = image::load_from_memory(&bytes) {
+                            let rgba = img.to_rgba8();
+                            let (w, h) = (rgba.width(), rgba.height());
+                            let raw = rgba.into_raw();
+                            if let Ok(icon) = TrayIconIcon::from_rgba(raw, w, h) {
+                                println!("[tray] loaded icon from {}", p);
+                                return Some(icon);
+                            }
+                        } else {
+                            println!("[tray] found {} but failed to decode as image", p);
+                        }
+                    }
+                }
+
+                // try base64 fallback (p + ".b64")
+                let p_b64 = format!("{}.b64", p);
+                if Path::new(&p_b64).exists() {
+                    if let Ok(text) = fs::read_to_string(&p_b64) {
+                        if let Ok(decoded) = base64::decode(text.trim()) {
+                            if let Ok(img) = image::load_from_memory(&decoded) {
+                                let rgba = img.to_rgba8();
+                                let (w, h) = (rgba.width(), rgba.height());
+                                let raw = rgba.into_raw();
+                                if let Ok(icon) = TrayIconIcon::from_rgba(raw, w, h) {
+                                    println!("[tray] loaded icon from {} (base64)", p_b64);
+                                    return Some(icon);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            println!("[tray] no tray icon found in assets");
+            None
+        }
+
+        let mut builder = TrayIconBuilder::new()
             .with_menu(Box::new(menu))
-            .with_tooltip("Rustine")
-            .build()?;
+            .with_tooltip("Rustine");
+
+        if let Some(icon) = load_tray_icon() {
+            // If the tray-icon crate exposes `with_icon`, this will use it.
+            // If this method doesn't exist for the installed crate version,
+            // the call will fail at compile time and needs adapting.
+            builder = builder.with_icon(icon);
+        }
+
+        let tray = builder.build()?;
 
         // Keep the tray alive for the process lifetime.
         let _static_tray_ref: &'static tray_icon::TrayIcon = Box::leak(Box::new(tray));
