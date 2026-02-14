@@ -43,6 +43,8 @@ mod real_tray {
         let add_item = MenuItem::new("Ajouter URL", true, None);
         let history_submenu = Submenu::new("Historique", true);
 
+        let webapps_submenu = Submenu::new("Webapps", true);
+
         let mut id_map: std::collections::HashMap<MenuId, TrayEvent> = std::collections::HashMap::new();
 
         if let Ok(list) = db.list_recent(5) {
@@ -57,10 +59,42 @@ mod real_tray {
             }
         }
 
+        // Build Webapps submenu: favourites first, then recent
+        if let Ok(favs) = db.list_favorites() {
+            if !favs.is_empty() {
+                for rec in favs {
+                    let display = rec.site_name.clone().unwrap_or_else(|| rec.label.clone());
+                    let label = format!("{} ({})", display, rec.url);
+                    let item = MenuItem::new(&label, true, None);
+                    let item_id = item.id();
+                    id_map.insert(item_id.clone(), TrayEvent::OpenUrl(rec.id));
+                    let _ = webapps_submenu.append_items(&[&item]);
+                    println!("[tray] added favourite webapp item id={:?} -> url id={}", item_id, rec.id);
+                }
+                let _ = webapps_submenu.append_items(&[&PredefinedMenuItem::separator()]);
+            }
+        }
+
+        if let Ok(list2) = db.list_recent(5) {
+            if !list2.is_empty() {
+                for rec in list2 {
+                    let display = rec.site_name.clone().unwrap_or_else(|| rec.label.clone());
+                    let label = format!("{} ({})", display, rec.url);
+                    let item = MenuItem::new(&label, true, None);
+                    let item_id = item.id();
+                    id_map.insert(item_id.clone(), TrayEvent::OpenUrl(rec.id));
+                    let _ = webapps_submenu.append_items(&[&item]);
+                    println!("[tray] added recent webapp item id={:?} -> url id={}", item_id, rec.id);
+                }
+            }
+        }
+
         let quit_item = MenuItem::new("Quitter Rustine", true, None);
         let _ = menu.append_items(&[
             &show_item,
             &add_item,
+            &PredefinedMenuItem::separator(),
+            &webapps_submenu,
             &PredefinedMenuItem::separator(),
             &history_submenu,
             &PredefinedMenuItem::separator(),

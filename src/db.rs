@@ -51,6 +51,9 @@ enum DbRequest {
         limit: i64,
         resp: Sender<anyhow::Result<Vec<UrlRecord>>> ,
     },
+    ListFavorites {
+        resp: Sender<anyhow::Result<Vec<UrlRecord>>> ,
+    },
     Delete {
         id: i64,
         resp: Sender<anyhow::Result<()>>,
@@ -121,6 +124,15 @@ impl DbHandle {
         self.tx
             .send(req)
             .map_err(|e| anyhow!("Failed to send list request: {}", e))?;
+        Ok(rx.recv().map_err(|e| anyhow!("DB response recv failed: {}", e))??)
+    }
+
+    pub fn list_favorites(&self) -> Result<Vec<UrlRecord>> {
+        let (tx, rx) = unbounded();
+        let req = DbRequest::ListFavorites { resp: tx };
+        self.tx
+            .send(req)
+            .map_err(|e| anyhow!("Failed to send list_favorites request: {}", e))?;
         Ok(rx.recv().map_err(|e| anyhow!("DB response recv failed: {}", e))??)
     }
 
@@ -211,6 +223,15 @@ fn db_thread(rx: Receiver<DbRequest>) -> Result<()> {
         )",
         params![],
     )?;
+
+    // Table to mark favourite URLs
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS favorites (
+            url_id INTEGER PRIMARY KEY,
+            added_at INTEGER NOT NULL
+        )",
+        params![],
+    )?;
     // New tables for site metadata and icons
     conn.execute(
         "CREATE TABLE IF NOT EXISTS site_meta (
@@ -283,6 +304,35 @@ fn db_thread(rx: Receiver<DbRequest>) -> Result<()> {
                 let res = (|| -> Result<()> {
                     conn.execute("DELETE FROM urls WHERE id = ?1", params![id])?;
                     Ok(())
+                })();
+                let _ = resp.send(res.map_err(|e| anyhow!(e.to_string())));
+            }
+            DbRequest::ListFavorites { resp } => {
+                let res = (|| -> Result<Vec<UrlRecord>> {
+                    let mut stmt = conn.prepare(
+                        "SELECT u.id, u.label, u.url, u.timestamp, m.site_name, ic.mime, ic.data
+                         FROM urls u
+                         INNER JOIN favorites f ON f.url_id = u.id
+                         LEFT JOIN site_meta m ON m.origin = (SELECT substr(u.url, instr(u.url, '://') + 3, instr(substr(u.url, instr(u.url, '://') + 3), '/') - 1))
+                         LEFT JOIN icons ic ON ic.site_id = m.id AND ic.fetched_at = (
+                             SELECT MAX(fetched_at) FROM icons WHERE site_id = m.id
+                         )
+                         ORDER BY f.added_at DESC",
+                    )?;
+                    let rows = stmt
+                        .query_map(params![], |row| {
+                            Ok(UrlRecord {
+                                id: row.get(0)?,
+                                label: row.get(1)?,
+                                url: row.get(2)?,
+                                _timestamp: row.get(3)?,
+                                site_name: row.get(4)?,
+                                icon_mime: row.get(5)?,
+                                icon_data: row.get(6)?,
+                            })
+                        })?
+                        .collect::<Result<Vec<_>, rusqlite::Error>>()?;
+                    Ok(rows)
                 })();
                 let _ = resp.send(res.map_err(|e| anyhow!(e.to_string())));
             }
