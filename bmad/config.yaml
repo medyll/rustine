@@ -1,0 +1,12 @@
+version: 1
+project:
+  name: rustine
+  description: Prototype Dioxus desktop app for managing quick URLs.
+  type: single-package
+  primary_language: Rust
+  package_manager: cargo
+  assets:
+    package_manager: pnpm
+    notes: Tailwind CSS pipeline in package.json
+  repo_root: .
+  created: 2026-03-05

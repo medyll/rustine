@@ -1,0 +1,60 @@
+version: 1
+project:
+  name: rustine
+  type: single-package
+  stack:
+    - Rust 2021
+    - Dioxus Desktop
+    - SQLite (rusqlite bundled)
+    - Tailwind CSS (pnpm)
+    - Reqwest (blocking)
+phases:
+  - name: Analysis
+    status: in_progress
+  - name: Planning
+    status: upcoming
+  - name: Solutioning
+    status: upcoming
+  - name: Implementation
+    status: upcoming
+progress: 10
+artifacts:
+  product_brief:
+    path: bmad/artifacts/product-brief.md
+    status: missing
+  prd:
+    path: bmad/artifacts/prd.md
+    status: missing
+  tech_spec:
+    path: bmad/artifacts/tech-spec.md
+    status: missing
+  architecture:
+    path: bmad/artifacts/architecture.md
+    status: missing
+  marketing_brief:
+    path: bmad/artifacts/marketing-brief.md
+    status: drafted
+audit:
+  last_run: "2026-03-05"
+  type: "full"
+  baseline: true
+  score: 76
+  project_type: "single-package"
+  packages_scanned: ["."]
+  critical: 0
+  major: 2
+  minor: 4
+  info: 3
+  artifact: "bmad/artifacts/audit-baseline-2026-03-05.md"
+  auto_stories_created: []
+qa:
+  test_plan: null
+  coverage: null
+  last_run: null
+  bugs: []
+sprints: []
+backlog: []
+recommendation: "/product-brief"
+dashboard:
+  last_generated: "2026-03-05"
+  master_generated: false

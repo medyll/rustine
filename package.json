@@ -9,6 +9,7 @@
   },
   "scripts": {
     "build:css": "pnpm dlx tailwindcss@3.4.2 -i ./assets/src/styles.css -o ./assets/dist/styles.css ",
-    "watch:css": "pnpm dlx tailwindcss@3.4.2 -i ./assets/src/styles.css -o ./assets/dist/styles.css --watch"
+    "watch:css": "pnpm dlx tailwindcss@3.4.2 -i ./assets/src/styles.css -o ./assets/dist/styles.css --watch",
+    "bmad:update-dashboard": "node .github/skills/bmad-master/scripts/generate-master-dashboard.mjs"
   }
 }
