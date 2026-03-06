@@ -1,6 +1,6 @@
 # BMAD Dashboard - rustine
 
-Generated: 2026-03-05
+Generated: 2026-03-06
 
 ---
 
@@ -8,20 +8,21 @@ Generated: 2026-03-05
 
 | Phase | Status |
 | --- | --- |
-| Analysis | in_progress |
-| Planning | upcoming |
-| Solutioning | upcoming |
-| Implementation | upcoming |
+| Analysis | completed |
+| Planning | completed |
+| Solutioning | completed |
+| Implementation | in_progress |
 
 ## Artifacts
 
 | Artifact | Status | Path |
 | --- | --- | --- |
-| Product Brief | missing | bmad/artifacts/product-brief.md |
-| PRD | missing | bmad/artifacts/prd.md |
-| Tech Spec | missing | bmad/artifacts/tech-spec.md |
-| Architecture | missing | bmad/artifacts/architecture.md |
+| Product Brief | completed | bmad/artifacts/product-brief.md |
+| PRD | completed | bmad/artifacts/prd.md |
+| Tech Spec | completed | bmad/artifacts/tech-spec.md |
+| Architecture | completed | bmad/artifacts/architecture.md |
 | Marketing Brief | drafted | bmad/artifacts/marketing-brief.md |
+| Connector | generated | bmad/artifacts/connector.yml |
 
 ## Audit
 
@@ -31,6 +32,5 @@ Generated: 2026-03-05
 
 ## Next Actions
 
-- /product-brief
-- /dev-story AUDIT-001
-- /dev-story AUDIT-002
+- bmad dev story AUDIT-001
+- bmad dev story AUDIT-002

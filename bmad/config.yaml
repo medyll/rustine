@@ -10,3 +10,8 @@ project:
     notes: Tailwind CSS pipeline in package.json
   repo_root: .
   created: 2026-03-05
+bmad:
+  version: 3.2.0
+  command_style: "bmad <verb> [noun] [--flag]"
+  connector:
+    path: bmad/artifacts/connector.yml

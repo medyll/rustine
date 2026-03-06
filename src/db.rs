@@ -1,8 +1,8 @@
 use anyhow::{anyhow, Result};
 use crossbeam_channel::{unbounded, Receiver, Sender};
+use once_cell::sync::OnceCell;
 use rusqlite::{params, Connection};
 use std::thread;
-use once_cell::sync::OnceCell;
 
 #[allow(dead_code)]
 #[derive(Debug, Clone)]
@@ -49,10 +49,10 @@ enum DbRequest {
     },
     ListRecent {
         limit: i64,
-        resp: Sender<anyhow::Result<Vec<UrlRecord>>> ,
+        resp: Sender<anyhow::Result<Vec<UrlRecord>>>,
     },
     ListFavorites {
-        resp: Sender<anyhow::Result<Vec<UrlRecord>>> ,
+        resp: Sender<anyhow::Result<Vec<UrlRecord>>>,
     },
     Delete {
         id: i64,
@@ -60,7 +60,7 @@ enum DbRequest {
     },
     GetById {
         id: i64,
-        resp: Sender<anyhow::Result<Option<UrlRecord>>> ,
+        resp: Sender<anyhow::Result<Option<UrlRecord>>>,
     },
     UpsertSiteMeta {
         origin: String,
@@ -72,7 +72,7 @@ enum DbRequest {
     },
     GetSiteMetaByOrigin {
         origin: String,
-        resp: Sender<anyhow::Result<Option<SiteMeta>>> ,
+        resp: Sender<anyhow::Result<Option<SiteMeta>>>,
     },
     InsertIcon {
         site_id: i64,
@@ -115,7 +115,8 @@ impl DbHandle {
         self.tx
             .send(req)
             .map_err(|e| anyhow!("Failed to send insert request: {}", e))?;
-        rx.recv().map_err(|e| anyhow!("DB response recv failed: {}", e))?
+        rx.recv()
+            .map_err(|e| anyhow!("DB response recv failed: {}", e))?
     }
 
     pub fn list_recent(&self, limit: i64) -> Result<Vec<UrlRecord>> {
@@ -124,7 +125,9 @@ impl DbHandle {
         self.tx
             .send(req)
             .map_err(|e| anyhow!("Failed to send list request: {}", e))?;
-        Ok(rx.recv().map_err(|e| anyhow!("DB response recv failed: {}", e))??)
+        Ok(rx
+            .recv()
+            .map_err(|e| anyhow!("DB response recv failed: {}", e))??)
     }
 
     pub fn list_favorites(&self) -> Result<Vec<UrlRecord>> {
@@ -133,7 +136,9 @@ impl DbHandle {
         self.tx
             .send(req)
             .map_err(|e| anyhow!("Failed to send list_favorites request: {}", e))?;
-        Ok(rx.recv().map_err(|e| anyhow!("DB response recv failed: {}", e))??)
+        Ok(rx
+            .recv()
+            .map_err(|e| anyhow!("DB response recv failed: {}", e))??)
     }
 
     pub fn delete(&self, id: i64) -> Result<()> {
@@ -142,7 +147,8 @@ impl DbHandle {
         self.tx
             .send(req)
             .map_err(|e| anyhow!("Failed to send delete request: {}", e))?;
-        rx.recv().map_err(|e| anyhow!("DB response recv failed: {}", e))?
+        rx.recv()
+            .map_err(|e| anyhow!("DB response recv failed: {}", e))?
     }
 
     pub fn get_by_id(&self, id: i64) -> Result<Option<UrlRecord>> {
@@ -151,10 +157,19 @@ impl DbHandle {
         self.tx
             .send(req)
             .map_err(|e| anyhow!("Failed to send get_by_id request: {}", e))?;
-        Ok(rx.recv().map_err(|e| anyhow!("DB response recv failed: {}", e))??)
+        Ok(rx
+            .recv()
+            .map_err(|e| anyhow!("DB response recv failed: {}", e))??)
     }
 
-    pub fn upsert_site_meta(&self, origin: &str, site_name: Option<&str>, description: Option<&str>, manifest_url: Option<&str>, metadata_fetched_at: Option<i64>) -> Result<()> {
+    pub fn upsert_site_meta(
+        &self,
+        origin: &str,
+        site_name: Option<&str>,
+        description: Option<&str>,
+        manifest_url: Option<&str>,
+        metadata_fetched_at: Option<i64>,
+    ) -> Result<()> {
         let (tx, rx) = unbounded();
         let req = DbRequest::UpsertSiteMeta {
             origin: origin.to_string(),
@@ -167,19 +182,34 @@ impl DbHandle {
         self.tx
             .send(req)
             .map_err(|e| anyhow!("Failed to send upsert_site_meta request: {}", e))?;
-        rx.recv().map_err(|e| anyhow!("DB response recv failed: {}", e))?
+        rx.recv()
+            .map_err(|e| anyhow!("DB response recv failed: {}", e))?
     }
 
     pub fn get_site_meta_by_origin(&self, origin: &str) -> Result<Option<SiteMeta>> {
         let (tx, rx) = unbounded();
-        let req = DbRequest::GetSiteMetaByOrigin { origin: origin.to_string(), resp: tx };
+        let req = DbRequest::GetSiteMetaByOrigin {
+            origin: origin.to_string(),
+            resp: tx,
+        };
         self.tx
             .send(req)
             .map_err(|e| anyhow!("Failed to send get_site_meta_by_origin request: {}", e))?;
-        Ok(rx.recv().map_err(|e| anyhow!("DB response recv failed: {}", e))??)
+        Ok(rx
+            .recv()
+            .map_err(|e| anyhow!("DB response recv failed: {}", e))??)
     }
 
-    pub fn insert_icon(&self, site_id: i64, src_url: &str, width: Option<i64>, height: Option<i64>, mime: Option<&str>, data: Vec<u8>, fetched_at: Option<i64>) -> Result<()> {
+    pub fn insert_icon(
+        &self,
+        site_id: i64,
+        src_url: &str,
+        width: Option<i64>,
+        height: Option<i64>,
+        mime: Option<&str>,
+        data: Vec<u8>,
+        fetched_at: Option<i64>,
+    ) -> Result<()> {
         let (tx, rx) = unbounded();
         let req = DbRequest::InsertIcon {
             site_id,
@@ -194,9 +224,9 @@ impl DbHandle {
         self.tx
             .send(req)
             .map_err(|e| anyhow!("Failed to send insert_icon request: {}", e))?;
-        rx.recv().map_err(|e| anyhow!("DB response recv failed: {}", e))?
+        rx.recv()
+            .map_err(|e| anyhow!("DB response recv failed: {}", e))?
     }
-
 }
 
 /// Initialize the DB actor: spawn a dedicated thread owning the Connection and return a `DbHandle`.
@@ -262,7 +292,12 @@ fn db_thread(rx: Receiver<DbRequest>) -> Result<()> {
 
     while let Ok(req) = rx.recv() {
         match req {
-            DbRequest::Insert { label, url, _timestamp, resp } => {
+            DbRequest::Insert {
+                label,
+                url,
+                _timestamp,
+                resp,
+            } => {
                 let res = (|| -> Result<()> {
                     conn.execute(
                         "INSERT INTO urls (label, url, timestamp) VALUES (?1, ?2, ?3)",
@@ -366,7 +401,14 @@ fn db_thread(rx: Receiver<DbRequest>) -> Result<()> {
                 })();
                 let _ = resp.send(res.map_err(|e| anyhow!(e.to_string())));
             }
-            DbRequest::UpsertSiteMeta { origin, site_name, description, manifest_url, metadata_fetched_at, resp } => {
+            DbRequest::UpsertSiteMeta {
+                origin,
+                site_name,
+                description,
+                manifest_url,
+                metadata_fetched_at,
+                resp,
+            } => {
                 let res = (|| -> Result<()> {
                     conn.execute(
                         "INSERT INTO site_meta (origin, site_name, description, manifest_url, metadata_fetched_at) 
@@ -401,7 +443,16 @@ fn db_thread(rx: Receiver<DbRequest>) -> Result<()> {
                 })();
                 let _ = resp.send(res.map_err(|e| anyhow!(e.to_string())));
             }
-            DbRequest::InsertIcon { site_id, src_url, width, height, mime, data, fetched_at, resp } => {
+            DbRequest::InsertIcon {
+                site_id,
+                src_url,
+                width,
+                height,
+                mime,
+                data,
+                fetched_at,
+                resp,
+            } => {
                 let res = (|| -> Result<()> {
                     conn.execute(
                         "INSERT INTO icons (site_id, src_url, width, height, mime, data, fetched_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
@@ -458,19 +509,51 @@ mod tests {
         )?;
 
         // Read back
-        let name: String = conn.query_row("SELECT site_name FROM site_meta WHERE origin = ?1", params!["example.com"], |r| r.get(0))?;
+        let name: String = conn.query_row(
+            "SELECT site_name FROM site_meta WHERE origin = ?1",
+            params!["example.com"],
+            |r| r.get(0),
+        )?;
         assert_eq!(name, "Example Site");
 
         // Insert icon
         conn.execute(
             "INSERT INTO icons (site_id, src_url, mime, data) VALUES (?1, ?2, ?3, ?4)",
-            params![1i64, "https://example.com/icon.png", "image/png", vec![1u8,2u8,3u8]],
+            params![
+                1i64,
+                "https://example.com/icon.png",
+                "image/png",
+                vec![1u8, 2u8, 3u8]
+            ],
         )?;
 
         // Read icon back
-        let mime: String = conn.query_row("SELECT mime FROM icons WHERE site_id = ?1", params![1i64], |r| r.get(0))?;
+        let mime: String = conn.query_row(
+            "SELECT mime FROM icons WHERE site_id = ?1",
+            params![1i64],
+            |r| r.get(0),
+        )?;
         assert_eq!(mime, "image/png");
 
+        Ok(())
+    }
+
+    #[test]
+    fn test_db_insert_and_list_recent_basic() -> Result<()> {
+        // Start DB actor; insert a URL and verify it's retrievable via list_recent
+        let db = init_db()?;
+        use std::time::{SystemTime, UNIX_EPOCH};
+        let ts = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as i64;
+        db.insert_url("AuditTest", "https://example.com", ts)?;
+        let items = db.list_recent(10)?;
+        assert!(
+            !items.is_empty(),
+            "list should have at least one item after insertion"
+        );
+        assert_eq!(items[0].url, "https://example.com");
         Ok(())
     }
 }
