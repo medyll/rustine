@@ -1,7 +1,7 @@
 ---
 story_id: AUDIT-001
 title: Add Unit Tests for DB Actor & URL Validation
-status: planned
+status: completed
 assignee: PM
 ---
 
@@ -20,5 +20,5 @@ The codebase currently lacks automated tests around the internal DB actor and UR
 - Keep tests isolated and avoid relying on network access; use in-memory or deterministic timestamps where possible.
 
 ## Tasks
-- [ ] Add test function test_db_insert_and_list_recent_basic (Rust)
-- [ ] Run cargo test and fix any failures
+- [x] Add test function test_db_insert_and_list_recent_basic (Rust)
+- [x] Run cargo test and fix any failures
