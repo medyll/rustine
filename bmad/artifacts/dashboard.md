@@ -1,6 +1,6 @@
 # BMAD Dashboard - rustine
 
-Generated: 2026-03-06
+Generated: 2026-03-07T16:57:21Z — PRD merged; prd-webapp.md removed
 
 ---
 
@@ -32,5 +32,4 @@ Generated: 2026-03-06
 
 ## Next Actions
 
-- bmad dev story AUDIT-001
-- bmad dev story AUDIT-002
+- bmad dev story PLAN-ARCH

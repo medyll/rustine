@@ -1,11 +1,11 @@
-use anyhow::Result;
-use once_cell::sync::OnceCell;
-use crossbeam_channel::{unbounded, Sender};
-use std::thread;
-use url::Url;
-use std::sync::Arc;
-use std::time::{SystemTime, UNIX_EPOCH};
 use crate::db;
+use anyhow::Result;
+use crossbeam_channel::{unbounded, Sender};
+use once_cell::sync::OnceCell;
+use std::sync::Arc;
+use std::thread;
+use std::time::{SystemTime, UNIX_EPOCH};
+use url::Url;
 
 #[derive(Clone)]
 enum UserEvent {
@@ -58,15 +58,19 @@ fn start_manager() -> Sender<UserEvent> {
             while let Ok(ev) = rx.recv() {
                 if let Err(e) = proxy_for_channel.send_event(ev.clone()) {
                     match ev {
-                        UserEvent::Navigate(ref u) => eprintln!("webview proxy send_event failed for {}: {}", u, e),
-                        UserEvent::Favicon(_) => eprintln!("webview proxy send_event failed for favicon: {}", e),
+                        UserEvent::Navigate(ref u) => {
+                            eprintln!("webview proxy send_event failed for {}: {}", u, e)
+                        }
+                        UserEvent::Favicon(_) => {
+                            eprintln!("webview proxy send_event failed for favicon: {}", e)
+                        }
                     }
                 }
             }
         });
 
-    // Keep an Arc to the window so we can set the icon later when favicon arrives
-    let window = Arc::new(window);
+        // Keep an Arc to the window so we can set the icon later when favicon arrives
+        let window = Arc::new(window);
 
         // Move the proxy into the run closure so we can clone it for fetch threads
         let proxy_for_run = proxy.clone();
@@ -256,7 +260,12 @@ pub fn open_url(url: String) -> Result<()> {
     if s.is_empty() {
         return Err(anyhow::anyhow!("empty url"));
     }
-    let normalized = if s.starts_with("http://") || s.starts_with("https://") || s.starts_with("about:") || s.starts_with("data:") || s.starts_with("file:") {
+    let normalized = if s.starts_with("http://")
+        || s.starts_with("https://")
+        || s.starts_with("about:")
+        || s.starts_with("data:")
+        || s.starts_with("file:")
+    {
         s.to_string()
     } else {
         // Try with http:// prefix
@@ -268,6 +277,7 @@ pub fn open_url(url: String) -> Result<()> {
     };
 
     let tx = start_manager();
-    tx.send(UserEvent::Navigate(normalized.clone())).map_err(|e| anyhow::anyhow!("failed to send open_url: {}", e))?;
+    tx.send(UserEvent::Navigate(normalized.clone()))
+        .map_err(|e| anyhow::anyhow!("failed to send open_url: {}", e))?;
     Ok(())
 }

@@ -1,6 +1,6 @@
+use anyhow::Result;
 use crossbeam_channel::{unbounded, Receiver, Sender};
 use once_cell::sync::OnceCell;
-use anyhow::Result;
 use std::thread;
 use std::time::Duration;
 
@@ -21,12 +21,12 @@ static TRAY_TX: OnceCell<Sender<TrayEvent>> = OnceCell::new();
 #[cfg(feature = "real_tray")]
 mod real_tray {
     use super::*;
-    use tray_icon::menu::{Menu, MenuItem, PredefinedMenuItem, Submenu, MenuId};
-    use tray_icon::TrayIconBuilder;
-    use tray_icon::Icon as TrayIconIcon;
+    use image::io::Reader as ImageReader;
     use std::fs;
     use std::path::Path;
-    use image::io::Reader as ImageReader;
+    use tray_icon::menu::{Menu, MenuId, MenuItem, PredefinedMenuItem, Submenu};
+    use tray_icon::Icon as TrayIconIcon;
+    use tray_icon::TrayIconBuilder;
     // Arc not needed here
 
     pub fn start_real_tray(db: crate::db::DbHandle) -> Result<()> {
@@ -45,7 +45,8 @@ mod real_tray {
 
         let webapps_submenu = Submenu::new("Webapps", true);
 
-        let mut id_map: std::collections::HashMap<MenuId, TrayEvent> = std::collections::HashMap::new();
+        let mut id_map: std::collections::HashMap<MenuId, TrayEvent> =
+            std::collections::HashMap::new();
 
         if let Ok(list) = db.list_recent(5) {
             for rec in list {
@@ -55,7 +56,10 @@ mod real_tray {
                 let item_id = item.id();
                 id_map.insert(item_id.clone(), TrayEvent::OpenUrl(rec.id));
                 let _ = history_submenu.append_items(&[&item]);
-                println!("[tray] added history menu item id={:?} -> url id={}", item_id, rec.id);
+                println!(
+                    "[tray] added history menu item id={:?} -> url id={}",
+                    item_id, rec.id
+                );
             }
         }
 
@@ -69,7 +73,10 @@ mod real_tray {
                     let item_id = item.id();
                     id_map.insert(item_id.clone(), TrayEvent::OpenUrl(rec.id));
                     let _ = webapps_submenu.append_items(&[&item]);
-                    println!("[tray] added favourite webapp item id={:?} -> url id={}", item_id, rec.id);
+                    println!(
+                        "[tray] added favourite webapp item id={:?} -> url id={}",
+                        item_id, rec.id
+                    );
                 }
                 let _ = webapps_submenu.append_items(&[&PredefinedMenuItem::separator()]);
             }
@@ -84,7 +91,10 @@ mod real_tray {
                     let item_id = item.id();
                     id_map.insert(item_id.clone(), TrayEvent::OpenUrl(rec.id));
                     let _ = webapps_submenu.append_items(&[&item]);
-                    println!("[tray] added recent webapp item id={:?} -> url id={}", item_id, rec.id);
+                    println!(
+                        "[tray] added recent webapp item id={:?} -> url id={}",
+                        item_id, rec.id
+                    );
                 }
             }
         }
@@ -101,7 +111,12 @@ mod real_tray {
             &quit_item,
         ]);
 
-        println!("[tray] menu set: show_id={:?}, add_id={:?}, quit_id={:?}", show_item.id(), add_item.id(), quit_item.id());
+        println!(
+            "[tray] menu set: show_id={:?}, add_id={:?}, quit_id={:?}",
+            show_item.id(),
+            add_item.id(),
+            quit_item.id()
+        );
 
         // Try to load a tray icon from assets and provide it to the builder
         fn load_tray_icon() -> Option<TrayIconIcon> {
@@ -208,7 +223,6 @@ mod real_tray {
 
         Ok(())
     }
-
 }
 
 /// Start a tray icon/menu. Requires the `real_tray` feature to be enabled.
@@ -241,7 +255,8 @@ pub fn get_receiver() -> Option<Receiver<TrayEvent>> {
 #[allow(dead_code)]
 pub fn send_event(ev: TrayEvent) -> Result<()> {
     if let Some(tx) = TRAY_TX.get() {
-        tx.send(ev).map_err(|e| anyhow::anyhow!("failed to send tray event: {}", e))?;
+        tx.send(ev)
+            .map_err(|e| anyhow::anyhow!("failed to send tray event: {}", e))?;
         Ok(())
     } else {
         Err(anyhow::anyhow!("tray not started"))

@@ -1,10 +1,10 @@
-use futures::stream::StreamExt;
-use dioxus::prelude::*;
-use std::fs;
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
-use dioxus::prelude::use_coroutine;
 use chrono::Utc;
+use dioxus::prelude::use_coroutine;
+use dioxus::prelude::*;
+use futures::stream::StreamExt;
+use std::fs;
 use url::Url;
 // use crate::webview; -- calling via `crate::webview::open_url(...)`
 
@@ -34,7 +34,8 @@ fn root() -> Element {
     let (err_tx, err_rx) = futures::channel::mpsc::unbounded::<String>();
 
     // Create an async channel that is safe to send from other threads.
-    let (tray_async_tx, tray_async_rx) = futures::channel::mpsc::unbounded::<crate::tray::TrayEvent>();
+    let (tray_async_tx, tray_async_rx) =
+        futures::channel::mpsc::unbounded::<crate::tray::TrayEvent>();
 
     // Background thread: read the crossbeam receiver and forward into the async channel.
     if let Some(rx) = crate::tray::get_receiver() {
@@ -62,18 +63,24 @@ fn root() -> Element {
                                     Ok(Some(rec)) => {
                                         let u = rec.url.clone();
                                         if let Err(e) = crate::webview::open_url(u) {
-                                            let _ = err_tx.unbounded_send(format!("Erreur ouverture URL (tray): {}", e));
+                                            let _ = err_tx.unbounded_send(format!(
+                                                "Erreur ouverture URL (tray): {}",
+                                                e
+                                            ));
                                         }
                                     }
                                     Ok(None) => {
-                                        let _ = err_tx.unbounded_send(format!("URL introuvable (id={})", id));
+                                        let _ = err_tx
+                                            .unbounded_send(format!("URL introuvable (id={})", id));
                                     }
                                     Err(e) => {
-                                        let _ = err_tx.unbounded_send(format!("Erreur DB (tray): {}", e));
+                                        let _ = err_tx
+                                            .unbounded_send(format!("Erreur DB (tray): {}", e));
                                     }
                                 }
                             } else {
-                                let _ = err_tx.unbounded_send("Base de données non disponible".to_string());
+                                let _ = err_tx
+                                    .unbounded_send("Base de données non disponible".to_string());
                             }
                         }
                         crate::tray::TrayEvent::Show => {

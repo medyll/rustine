@@ -1,129 +1,104 @@
-# PRD – rustine
+# PRD – rustine (webapp mode)
 
 ## Overview
 
-rustine is a cross-platform desktop application for managing quick-access URLs. It provides a native desktop interface to store, organize, and launch frequently-used URLs with auto-fetched metadata (favicons, site names). The app runs in the system tray for quick access and persists data locally in SQLite.
+rustine lets users transform websites into lightweight desktop webapps. Each webapp runs in an embedded, sandboxed webview inside rustine and can be installed, launched, and managed from the main application. On Windows, a resident tray icon enables quick actions: add a site, open a site (in-app), or open the main application UI.
 
 ## Goals & Success Metrics
 
 | Goal | Metric | Target |
 |---|---|---|
-| Launch URLs quickly | Time from click to browser open | < 500ms |
-| Auto-fetch metadata | % of URLs with favicon displayed | > 90% |
-| Offline capability | App launches without internet | 100% |
-| Cross-platform | Runs on Windows/macOS/Linux | All three |
+| Convert websites into usable desktop webapps | Number of installed webapps per user | >= 3 for engaged users (30 days) |
+| Fast webapp launch | Time from action to webapp window shown | < 500ms (cold/warm depends on OS) |
+| Tray-driven adoption | % of installs performed via tray quick-add | > 25% |
+| Local privacy | No cloud storage for webapp configs by default | 100% local by default |
 
 ## User Personas
 
 ### Persona 1 – Power User (Mydde)
-- Role: Developer, productivity-focused
-- Needs: Fast URL access without browser, visual favicons for quick recognition
-- Pain points: Browser bookmarks get lost, need to search, no offline access
+- Role: Developer / power user
+- Needs: Convert dashboards and tools into app-like windows, open them quickly from tray, keep configs local
+- Pain points: Too many browser tabs; no simple way to turn a site into a single-purpose window
 
-## Use Cases
+## Primary Use Cases
 
-### UC-01 – Add New URL
+### UC-01 – Install (Add) Webapp
 **Actor:** User
-**Trigger:** User clicks "Add" button or uses tray menu
+**Trigger:** User selects "Add site" from tray or clicks "Install webapp" in main UI
 **Flow:**
-1. User enters URL (e.g., "github.com")
-2. App validates URL format
-3. App fetches metadata (favicon, site name) in background
-4. App saves URL + metadata to SQLite
-5. UI updates to show new URL with icon
-**Expected outcome:** New URL appears in list within 2 seconds
-**Edge cases:** Invalid URL → show error; metadata fetch fails → save URL anyway, show placeholder
+1. User inputs a URL or chooses "From current site"
+2. App validates URL and creates a webapp entry
+3. App fetches metadata (icon, title) and saves webapp config to SQLite
+4. App optionally creates a desktop shortcut or an entry in the app list
+**Expected outcome:** A new webapp appears in the app list and can be launched immediately
 
-### UC-02 – Launch URL
+### UC-02 – Open Webapp (In-App)
 **Actor:** User
-**Trigger:** User clicks URL in list or selects from tray menu
+**Trigger:** User selects a webapp from the main UI or tray menu
 **Flow:**
-1. User clicks URL entry
-2. App opens system default browser with URL
-**Expected outcome:** Browser opens within 500ms
-**Edge cases:** URL invalid → show error toast
+1. App opens the webapp in an embedded, sandboxed webview window
+2. Window presents site content with minimal chrome (back/forward/refresh when relevant)
+3. User interacts with site as if it were a native app
+**Expected outcome:** Webapp loads and is usable within 500ms (warm) / < 2s (cold)
 
-### UC-03 – Delete URL
+### UC-03 – Tray Quick Actions
 **Actor:** User
-**Trigger:** User right-clicks URL → Delete
+**Trigger:** User clicks system tray icon (Windows)
 **Flow:**
-1. User selects URL
-2. User confirms deletion
-3. App removes URL + metadata from SQLite
-4. UI updates
-**Expected outcome:** URL removed from list immediately
+1. Tray menu shows quick actions: Add site, Open app, Recent webapps
+2. User chooses "Add site" to install quickly, or clicks a recent webapp to open it in-app
+**Expected outcome:** Tray actions perform within 200ms for menu display and <500ms for launching
 
-### UC-04 – View URL List
+### UC-04 – Manage / Uninstall Webapp
 **Actor:** User
-**Trigger:** User opens app window
+**Trigger:** User opens main app UI and selects a webapp → Settings / Uninstall
 **Flow:**
-1. App loads all URLs from SQLite
-2. Displays list with favicons, labels, timestamps
-**Expected outcome:** List loads within 100ms for < 100 URLs
-
-### UC-05 – System Tray Quick Access
-**Actor:** User
-**Trigger:** User clicks tray icon
-**Flow:**
-1. Tray menu shows recent URLs
-2. User clicks URL to launch
-3. Browser opens
-**Expected outcome:** Tray menu appears within 200ms
+1. User edits name, icon, or launch options, or uninstalls the webapp
+2. App updates SQLite and removes associated shortcuts
+**Expected outcome:** Changes persist locally and take effect immediately
 
 ## Functional Requirements
 
 | ID | Requirement | Priority | Notes |
 |---|---|---|---|
-| FR-01 | Add URL with optional label | Must | Auto-validate URL format |
-| FR-02 | Display URL list with favicons | Must | Fallback to placeholder if fetch fails |
-| FR-03 | Launch URL in system browser | Must | Use webbrowser crate |
-| FR-04 | Delete URL | Must | Confirm before delete |
-| FR-05 | System tray icon with menu | Must | Show recent URLs |
-| FR-06 | Auto-fetch favicon from site | Should | Try /favicon.ico first, then parse HTML |
-| FR-07 | Auto-fetch site name from meta | Should | Parse og:title or <title> |
-| FR-08 | Persist to local SQLite | Must | Use rusqlite with bundled feature |
-| FR-09 | Window minimize to tray | Should | Close button minimizes to tray |
-| FR-10 | Edit URL label | Could | Future version |
+| FR-01 | Install a website as a webapp (create managed entry) | Must | Accept URL or discovery flow |
+| FR-02 | Manage installed webapps (list, edit, uninstall) | Must | Show icon, name, URL, launch options |
+| FR-03 | Open webapp inside embedded webview by default | Must | Option to open externally in system browser |
+| FR-04 | System tray icon with quick-add and quick-launch | Must | On Windows: menu includes Add site, Open app, recent webapps |
+| FR-05 | Persist webapp configs locally (SQLite) | Must | Use rusqlite bundled feature |
+| FR-06 | Fetch webapp metadata (icon, title) | Should | Fallback to placeholder icons if needed |
+| FR-07 | Create OS-level shortcut (optional) | Could | Platform-specific behavior |
+| FR-08 | Webview sandboxing and per-app permission prompts | Must | Prevent cross-app data leakage |
 
 ## Non-Functional Requirements
 
 | Category | Requirement | Acceptance Criteria |
 |---|---|---|
-| Performance | App startup time | < 2 seconds cold start |
-| Performance | URL list load | < 100ms for 100 URLs |
-| Performance | Browser launch | < 500ms from click |
-| Security | No remote data exfiltration | All data stays local |
-| Security | No secrets in code | No API keys or credentials |
-| Reliability | Graceful metadata failure | App works even if favicon fetch fails |
-| Compatibility | Windows 10+ | App runs without admin |
-| Compatibility | macOS 11+ | App runs without admin |
-| Compatibility | Linux (Ubuntu 20.04+) | App runs without admin |
+| Performance | Webapp launch latency | < 500ms warm, < 2000ms cold on typical hardware |
+| Security | Webview content isolation | Each webapp runs in its own context; no shared cookies unless explicitly enabled |
+| Privacy | Local-first storage | No telemetry or cloud sync by default |
+| Compatibility | Windows 10+ priority | Support macOS/Linux with equivalent UI behaviors |
 
 ## Out of Scope
 
-- Cloud sync / backup
-- User accounts / authentication
-- Browser extension
-- Mobile companion app
-- URL sharing / collaboration
-- Advanced tagging / categories (v1)
-- Import / export (v1)
+- Cloud sync / multi-device sync (v1)
+- Mobile companion apps
+- Built-in browser extension
 
 ## Dependencies
 
-- **System browser**: Uses system default browser (webbrowser crate)
-- **SQLite**: Bundled via rusqlite (no external DB required)
-- **No external APIs**: All metadata fetched via HTTP from target sites
+- Embedded webview engine (wry or equivalent)
+- rusqlite for local persistence
+- tray integration library for cross-platform tray/menu support
 
 ## Open Questions
 
-- [ ] Should the app start minimized to tray on launch?
-- [ ] Should the window close button minimize to tray or quit the app?
-- [ ] Is there a maximum number of URLs to store?
-- [ ] Should we add keyboard shortcuts (e.g., Ctrl+N for new URL)?
+- Should installs optionally register a protocol handler or OS shortcut automatically?
+- What are the default per-webapp permission rules (media, notifications)?
 
 ## Revision History
 
 | Date | Author | Change |
 |---|---|---|
-| 2026-03-06 | PM Agent | Initial draft from product brief |
+| 2026-03-07 | PM Agent | PRD updated to webapp/webview model and tray quick-actions |
+

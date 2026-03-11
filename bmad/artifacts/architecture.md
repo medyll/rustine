@@ -126,6 +126,16 @@ A native desktop application where all components run in a single process. The d
 
 ---
 
+## Additional ADRs (new)
+
+- ADR-05 — Logging & Observability — bmad/artifacts/adrs/ADR-05-logging-observability.md
+- ADR-06 — Database file location & migrations — bmad/artifacts/adrs/ADR-06-db-file-location-and-migrations.md
+- ADR-07 — Web fetch timeouts for metadata — bmad/artifacts/adrs/ADR-07-webfetch-timeouts.md
+- ADR-08 — Default for `real_tray` feature — bmad/artifacts/adrs/ADR-08-tray-feature-default.md
+- ADR-09 — Packaging & distribution strategy — bmad/artifacts/adrs/ADR-09-packaging-distribution.md
+
+---
+
 ## Data Flow
 
 ### Flow: Add New URL
