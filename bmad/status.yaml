@@ -17,7 +17,6 @@ phases:
     status: completed
   - name: Implementation
     status: in_progress
-progress: 63
 progress: 64
 active_role: Developer
 last_analyzed: "2026-03-24T00:00:00Z"
@@ -62,7 +61,6 @@ qa:
   last_run: null
   bugs: []
 sprints: []
-backlog: []
 backlog:
   - S1-01
   - S1-02
