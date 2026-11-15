@@ -4,8 +4,8 @@
   "private": true,
   "devDependencies": {
     "autoprefixer": "^10.6.2",
-    "postcss": "^8.5.32",
-    "tailwindcss": "^4.3.3"
+    "postcss": "^8.5.33",
+    "tailwindcss": "^4.3.5"
   },
   "scripts": {
     "build:css": "pnpm dlx tailwindcss@3.4.2 -i ./assets/src/styles.css -o ./assets/dist/styles.css ",
