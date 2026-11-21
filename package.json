@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "devDependencies": {
-    "autoprefixer": "^10.6.2",
+    "autoprefixer": "^10.7.0",
     "postcss": "^8.5.33",
     "tailwindcss": "^4.3.5"
   },
