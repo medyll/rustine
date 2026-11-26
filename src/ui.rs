@@ -9,20 +9,20 @@ use url::Url;
 // use crate::webview; -- calling via `crate::webview::open_url(...)`
 
 fn root() -> Element {
-    let mut urls = use_signal(|| Vec::<crate::db::UrlRecord>::new());
+    let mut urls = use_signal(Vec::<crate::db::UrlRecord>::new);
 
     // input state for new URL and error message
-    let mut label_input = use_signal(|| String::new());
-    let mut url_input = use_signal(|| String::new());
-    let mut error_msg = use_signal(|| String::new());
+    let mut label_input = use_signal(String::new);
+    let mut url_input = use_signal(String::new);
+    let mut error_msg = use_signal(String::new);
 
     // selected screen for simple in-app navigation (None => list view)
     let mut selected_screen = use_signal(|| Option::<i64>::None);
 
     // Load compiled Tailwind CSS from assets at runtime and inject into the page.
-    let style_css = use_signal(|| String::new());
+    let style_css = use_signal(String::new);
     {
-        let mut style_css = style_css.clone();
+        let mut style_css = style_css;
         use_effect(move || {
             let css = fs::read_to_string("assets/dist/styles.css").unwrap_or_default();
             style_css.set(css);
@@ -152,22 +152,16 @@ fn root() -> Element {
     });
 
     // Load initial list once
-    {
-        let db_coroutine = db_coroutine.clone();
-        use_effect(move || {
-            db_coroutine.send(DbAction::Load);
-        });
-    }
+    use_effect(move || {
+        db_coroutine.send(DbAction::Load);
+    });
 
-    let on_delete = {
-        let db_coroutine = db_coroutine.clone();
-        move |id: i64| {
-            db_coroutine.send(DbAction::Delete(id));
-        }
+    let on_delete = move |id: i64| {
+        db_coroutine.send(DbAction::Delete(id));
     };
 
     let mut on_details = {
-        let mut selected = selected_screen.clone();
+        let mut selected = selected_screen;
         move |id: i64| {
             selected.set(Some(id));
         }
@@ -220,7 +214,7 @@ fn root() -> Element {
                     }
                     // normalize URL (e.g. add trailing slash if parsed)
                     let normalized = Into::<String>::into(parsed);
-                    let db_coroutine = db_coroutine.clone();
+                    let db_coroutine = db_coroutine;
                     // send insert action with timestamp
                     db_coroutine.send(DbAction::Insert(lab, normalized, Utc::now().timestamp()));
                     // clear inputs (error cleared by coroutine on success)

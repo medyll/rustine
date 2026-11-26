@@ -2,7 +2,6 @@ use anyhow::Result;
 use crossbeam_channel::{unbounded, Receiver, Sender};
 use once_cell::sync::OnceCell;
 use std::thread;
-use std::time::Duration;
 
 // URL record type not referenced in this module
 
@@ -21,7 +20,7 @@ static TRAY_TX: OnceCell<Sender<TrayEvent>> = OnceCell::new();
 #[cfg(feature = "real_tray")]
 mod real_tray {
     use super::*;
-    use image::io::Reader as ImageReader;
+
     use std::fs;
     use std::path::Path;
     use tray_icon::menu::{Menu, MenuId, MenuItem, PredefinedMenuItem, Submenu};
@@ -150,7 +149,10 @@ mod real_tray {
                 let p_b64 = format!("{}.b64", p);
                 if Path::new(&p_b64).exists() {
                     if let Ok(text) = fs::read_to_string(&p_b64) {
-                        if let Ok(decoded) = base64::decode(text.trim()) {
+                        if let Ok(decoded) = base64::Engine::decode(
+                            &base64::engine::general_purpose::STANDARD,
+                            text.trim(),
+                        ) {
                             if let Ok(img) = image::load_from_memory(&decoded) {
                                 let rgba = img.to_rgba8();
                                 let (w, h) = (rgba.width(), rgba.height());
@@ -234,7 +236,7 @@ pub fn start_tray(db: crate::db::DbHandle) -> Result<()> {
 
     #[cfg(feature = "real_tray")]
     {
-        return real_tray::start_real_tray(db.clone());
+        real_tray::start_real_tray(db.clone())
     }
 
     // If `real_tray` feature is not enabled, return an error to make this explicit.

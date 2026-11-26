@@ -85,8 +85,8 @@ fn start_manager() -> Sender<UserEvent> {
                             eprintln!("webview failed to load URL {}: {}", url, e);
                         } else {
                             // Ensure the webview window is visible and focused when navigating.
-                            let _ = window.set_visible(true);
-                            let _ = window.set_focus();
+                            window.set_visible(true);
+                            window.set_focus();
                             // spawn a background fetch for favicon for this url
                             let proxy_clone = proxy_for_run.clone();
                             let _window_clone = window.clone();
@@ -236,14 +236,14 @@ fn start_manager() -> Sender<UserEvent> {
                         }
                     }
                 },
-                tao::event::Event::WindowEvent { event, .. } => match event {
-                    tao::event::WindowEvent::CloseRequested => {
-                        // Prevent closing the main application when the webview window is closed.
-                        // Instead of exiting the event loop (which can terminate the app on
-                        // some platforms/configurations), just hide the webview window.
-                        let _ = window.set_visible(false);
-                    }
-                    _ => {}
+                tao::event::Event::WindowEvent {
+                    event: tao::event::WindowEvent::CloseRequested,
+                    ..
+                } => {
+                    // Prevent closing the main application when the webview window is closed.
+                    // Instead of exiting the event loop (which can terminate the app on
+                    // some platforms/configurations), just hide the webview window.
+                    window.set_visible(false);
                 },
                 _ => {}
             }

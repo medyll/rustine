@@ -125,9 +125,8 @@ impl DbHandle {
         self.tx
             .send(req)
             .map_err(|e| anyhow!("Failed to send list request: {}", e))?;
-        Ok(rx
-            .recv()
-            .map_err(|e| anyhow!("DB response recv failed: {}", e))??)
+        rx.recv()
+            .map_err(|e| anyhow!("DB response recv failed: {}", e))?
     }
 
     pub fn list_favorites(&self) -> Result<Vec<UrlRecord>> {
@@ -136,9 +135,8 @@ impl DbHandle {
         self.tx
             .send(req)
             .map_err(|e| anyhow!("Failed to send list_favorites request: {}", e))?;
-        Ok(rx
-            .recv()
-            .map_err(|e| anyhow!("DB response recv failed: {}", e))??)
+        rx.recv()
+            .map_err(|e| anyhow!("DB response recv failed: {}", e))?
     }
 
     pub fn delete(&self, id: i64) -> Result<()> {
@@ -157,9 +155,8 @@ impl DbHandle {
         self.tx
             .send(req)
             .map_err(|e| anyhow!("Failed to send get_by_id request: {}", e))?;
-        Ok(rx
-            .recv()
-            .map_err(|e| anyhow!("DB response recv failed: {}", e))??)
+        rx.recv()
+            .map_err(|e| anyhow!("DB response recv failed: {}", e))?
     }
 
     pub fn upsert_site_meta(
@@ -195,11 +192,11 @@ impl DbHandle {
         self.tx
             .send(req)
             .map_err(|e| anyhow!("Failed to send get_site_meta_by_origin request: {}", e))?;
-        Ok(rx
-            .recv()
-            .map_err(|e| anyhow!("DB response recv failed: {}", e))??)
+        rx.recv()
+            .map_err(|e| anyhow!("DB response recv failed: {}", e))?
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn insert_icon(
         &self,
         site_id: i64,
